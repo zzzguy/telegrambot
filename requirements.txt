@@ -1,6 +1,6 @@
 pykrx
-pandas
-pandas-ta
+pandas<2.2.0
+pandas-ta==0.3.14b0
 requests
 beautifulsoup4
 python-dotenv
@@ -12,4 +12,5 @@ fpdf2
 finance-datareader
 markdown
 schedule
+
 
