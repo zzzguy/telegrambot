@@ -73,3 +73,4 @@ if __name__ == "__main__":
     # Test
     dispatcher = Dispatcher()
     # dispatcher.send_telegram_message("테스트 메시지입니다.")
+
