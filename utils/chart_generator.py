@@ -109,3 +109,4 @@ class ChartGenerator:
             print(f"Sector chart save failed: {e}")
             return False
 
+
