@@ -1,6 +1,7 @@
 pykrx
-pandas<2.2.0
-pandas-ta==0.3.14b0
+numpy<2.0.0
+pandas<2.1.0
+git+https://github.com/twopirllc/pandas-ta.git@development
 requests
 beautifulsoup4
 python-dotenv
@@ -12,5 +13,4 @@ fpdf2
 finance-datareader
 markdown
 schedule
-
 
