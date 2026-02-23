@@ -1,5 +1,5 @@
 import pandas as pd
-import pandas_ta as ta
+#import pandas_ta as ta
 import FinanceDataReader as fdr
 import requests
 from bs4 import BeautifulSoup
@@ -523,62 +523,65 @@ class DataAnalyst:
         except:
             return []
 
-    def analyze_technical(self, ticker):
-        """기술적 지표 및 VPA(Volume Price Action) + OBV 분석"""
+      def analyze_technical(self, ticker):
+        """기술적 지표 및 VPA(Volume Price Action) + OBV 분석 (라이브러리 없이 직접 계산)"""
         try:
             start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
             df = fdr.DataReader(ticker, start_date)
             
             if len(df) < 120: return None
             
-            # 지표 계산
+            # 이동평균선 계산
             df['MA5'] = df['Close'].rolling(window=5).mean()
             df['MA20'] = df['Close'].rolling(window=20).mean()
             df['MA60'] = df['Close'].rolling(window=60).mean()
             df['MA120'] = df['Close'].rolling(window=120).mean()
             df['V_MA20'] = df['Volume'].rolling(window=20).mean()
-            df['RSI'] = ta.rsi(df['Close'], length=14)
+
+            # RSI 매뉴얼 계산 (14일 기준)
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
+
+            # ADX 매뉴얼 계산
+            high_low = df['High'] - df['Low']
+            high_close = (df['High'] - df['Close'].shift()).abs()
+            low_close = (df['Low'] - df['Close'].shift()).abs()
+            tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            atr = tr.rolling(window=14).mean()
+            up_move = df['High'] - df['High'].shift()
+            down_move = df['Low'].shift() - df['Low']
+            plus_dm = (up_move.where((up_move > down_move) & (up_move > 0), 0)).rolling(window=14).mean()
+            minus_dm = (down_move.where((down_move > up_move) & (down_move > 0), 0)).rolling(window=14).mean()
+            plus_di = 100 * (plus_dm / atr)
+            minus_di = 100 * (minus_dm / atr)
+            dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+            adx_val = dx.rolling(window=14).mean().iloc[-1] if not dx.empty else 0
             
-            # OBV 계산 및 트렌드 분석
+            # OBV 매집 분석
             obv_values = self.calculate_obv(df)
             if obv_values:
                 df['OBV'] = obv_values
-                # OBV가 최근 5일간 상승 추세인지 (매집 증거)
                 obv_recent = df['OBV'].tail(5).tolist()
                 is_obv_rising = all(x < y for x, y in zip(obv_recent, obv_recent[1:]))
             else:
                 is_obv_rising = False
 
-            # ADX 계산 (추세 강도)
-            df.ta.adx(append=True)
-            adx_cols = [c for c in df.columns if 'ADX' in c]
-            adx_val = df[adx_cols[0]].iloc[-1] if adx_cols else 0
-            
             last = df.iloc[-1]
             prev = df.iloc[-2]
-            
-            # 1. 정배열 강도
-            is_perfect = last['MA5'] > last['MA20'] > last['MA60'] > last['MA120']
-            
-            # 2. VPA 패턴
-            is_breakout = last['Close'] > prev['Close'] and last['Volume'] > last['V_MA20'] * 2
-            is_narrow_pullback = last['Close'] <= prev['Close'] and last['Volume'] < last['V_MA20'] * 0.5
-            
-            # 3. 추세 강도
-            strong_trend = adx_val > 25
-            
-            change_rate = ((last['Close'] - prev['Close']) / prev['Close']) * 100
             
             return {
                 'ticker': ticker,
                 'close': int(last['Close']),
-                'change_rate': change_rate,
-                'rsi': last['RSI'],
+                'change_rate': ((last['Close'] - prev['Close']) / prev['Close']) * 100,
+                'rsi': last['RSI'] if isinstance(last['RSI'], float) else last['RSI'].iloc[-1],
                 'adx': adx_val,
-                'is_perfect': is_perfect,
-                'is_breakout': is_breakout,
-                'is_pullback': is_narrow_pullback,
-                'strong_trend': strong_trend,
+                'is_perfect': last['MA5'] > last['MA20'] > last['MA60'] > last['MA120'],
+                'is_breakout': last['Close'] > prev['Close'] and last['Volume'] > last['V_MA20'] * 2,
+                'is_pullback': last['Close'] <= prev['Close'] and last['Volume'] < last['V_MA20'] * 0.5,
+                'strong_trend': adx_val > 25,
                 'volume': last['Volume'],
                 'v_ma20': last['V_MA20'],
                 'is_obv_rising': is_obv_rising
@@ -586,7 +589,7 @@ class DataAnalyst:
         except Exception as e:
             print(f"기술적 분석 상세 오류 ({ticker}): {e}")
             return None
-
+            
     def get_market_cap(self, ticker):
         """시가총액 정보 수집"""
         url = f"https://finance.naver.com/item/main.naver?code={ticker}"
@@ -718,3 +721,4 @@ if __name__ == "__main__":
     top_picks = analyst.run()
     for i, s in enumerate(top_picks[:10]):
         print(f"{i+1}. {s['name']} - 영업이익: {s['profits']}, 외인: {s['f_net']}, 기관: {s['i_net']}")
+
